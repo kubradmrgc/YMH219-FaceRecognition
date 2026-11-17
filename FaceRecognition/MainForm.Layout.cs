@@ -1,8 +1,5 @@
 namespace FaceRecognition;
 
-/// <summary>
-/// Ana pencerenin kontrolleri ve yerleşimi. Olay mantığı MainForm.cs dosyasındadır.
-/// </summary>
 public partial class MainForm
 {
     private const int SidePanelWidth = 430;
@@ -245,7 +242,6 @@ public partial class MainForm
         return row;
     }
 
-    /// <summary>Listeyi içeren satır kalan alanı doldurur, diğer satırlar içerik kadar yer kaplar.</summary>
     private static void SetRowStyles(TableLayoutPanel table, int fillRow)
     {
         table.RowStyles.Clear();

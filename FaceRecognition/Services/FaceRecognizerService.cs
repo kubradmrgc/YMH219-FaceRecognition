@@ -6,13 +6,8 @@ using OpenCvSharp;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Tanıma modelini eğitir, diske kaydeder, açılışta yükler ve yüzler için tahmin yapar.
-/// Model dosyası (lbph-model.yml) etiketleri sayı olarak tutar; sayıların kişi adları labels.json dosyasındadır.
-/// </summary>
 public sealed class FaceRecognizerService : IDisposable
 {
-    /// <summary>Canlı kamerada ışık ve kutu kayması mesafeyi yükseltir; 95 daha toleranslıdır.</summary>
     public const double DefaultThreshold = 95;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -39,7 +34,6 @@ public sealed class FaceRecognizerService : IDisposable
         this.createRecognizer = createRecognizer;
     }
 
-    /// <summary>Bu mesafenin üstündeki tahminler "Bilinmeyen" sayılır.</summary>
     public double Threshold { get; set; } = DefaultThreshold;
 
     public ModelInfo? Info { get; private set; }
@@ -55,7 +49,6 @@ public sealed class FaceRecognizerService : IDisposable
         }
     }
 
-    /// <summary>Veri setindeki tüm örneklerle yeni model eğitir ve kaydeder. Uzun sürebilir; arka planda çağrılmalıdır.</summary>
     public ModelInfo Train(FaceDataset dataset)
     {
         List<LabelInfo> labels = dataset.GetLabels().Where(l => l.SampleCount > 0).ToList();
@@ -115,7 +108,6 @@ public sealed class FaceRecognizerService : IDisposable
         }
     }
 
-    /// <summary>Kayıtlı modeli yükler. Model dosyası yoksa false döner; bozuk veya uyumsuzsa <see cref="FaceAppException"/> fırlatır.</summary>
     public bool LoadIfExists()
     {
         if (!File.Exists(paths.ModelFile))
@@ -174,7 +166,6 @@ public sealed class FaceRecognizerService : IDisposable
         }
     }
 
-    /// <summary>Ön işlenmiş yüz için en yakın etiketi bulur ve eşiğe göre tanınıp tanınmadığına karar verir.</summary>
     public RecognitionResult Predict(Mat preparedFace)
     {
         lock (sync)
@@ -227,7 +218,6 @@ public sealed class FaceRecognizerService : IDisposable
         }
     }
 
-    /// <summary>Önce geçici dosyaya yazar, sonra yerine taşır; yazma yarıda kalırsa eski dosya bozulmaz.</summary>
     private static void WriteAtomically(string path, string content)
     {
         string temp = path + ".tmp";

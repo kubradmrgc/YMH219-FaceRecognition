@@ -4,13 +4,8 @@ using Size = OpenCvSharp.Size;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Resim dosyalarını okur ve yazar. Cv2.ImRead/ImWrite, sistem kod sayfasında olmayan karakter içeren yollarda
-/// (ör. OneDrive klasör adları) çalışmadığı için baytlar .NET ile okunup OpenCV'de bellekte çözülür.
-/// </summary>
 public static class ImageFileService
 {
-    /// <summary>Görüntülenen ve işlenen resmin en uzun kenarı en fazla bu kadar piksel olur.</summary>
     public const int MaxImageSide = 1920;
 
     public const long MaxFileBytes = 50L * 1024 * 1024;
@@ -22,7 +17,6 @@ public static class ImageFileService
     public static bool IsSupported(string path) =>
         SupportedExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
 
-    /// <summary>Resmi renkli (BGR) olarak okur; en uzun kenarı <paramref name="maxSide"/> pikselden büyükse küçültür.</summary>
     public static LoadedImage Load(string path, int maxSide = MaxImageSide)
     {
         Mat image = Read(path);
@@ -40,7 +34,6 @@ public static class ImageFileService
         return new LoadedImage(resized, originalSize);
     }
 
-    /// <summary>Resmi özgün boyutunda, renkli (BGR) olarak okur.</summary>
     public static Mat Read(string path)
     {
         string name = Path.GetFileName(path);
@@ -92,7 +85,6 @@ public static class ImageFileService
         return image;
     }
 
-    /// <summary>Resmi PNG olarak kaydeder; klasör yoksa oluşturur.</summary>
     public static void WritePng(string path, Mat image)
     {
         if (image.Empty())

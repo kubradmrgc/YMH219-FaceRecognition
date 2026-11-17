@@ -3,9 +3,6 @@ using Size = OpenCvSharp.Size;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Haar cascade sınıflandırıcısı ile görüntüdeki önden yüzleri bulur.
-/// </summary>
 public sealed class FaceDetector : IDisposable
 {
     public const double ScaleFactor = 1.1;
@@ -60,7 +57,6 @@ public sealed class FaceDetector : IDisposable
         }
     }
 
-    /// <summary>Yüzleri soldan sağa sıralı olarak döndürür.</summary>
     public Rect[] Detect(Mat image)
     {
         using var gray = new Mat();

@@ -3,10 +3,6 @@ using OpenCvSharp.Face;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// OpenCV face modülündeki LBPH (Local Binary Patterns Histograms) tanıyıcısı.
-/// Her yüz 8x8 hücreye bölünür, her hücrenin LBP histogramı çıkarılır; tahminde en yakın histogram bulunur.
-/// </summary>
 public sealed class LbphFaceRecognizer : IFaceRecognizer
 {
     public const int Radius = 1;

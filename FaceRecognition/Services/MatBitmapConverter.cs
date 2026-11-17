@@ -4,11 +4,6 @@ using OpenCvSharp;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// OpenCV Mat'ini Windows Forms'ta gösterilebilecek Bitmap'e çevirir.
-/// OpenCvSharp4.Extensions paketi .NET 10'a ait System.Drawing.Common gerektirdiği ve .NET 9 WinForms ile
-/// çakıştığı için dönüşüm burada yapılır.
-/// </summary>
 public static class MatBitmapConverter
 {
     public static Bitmap ToBitmap(Mat image)

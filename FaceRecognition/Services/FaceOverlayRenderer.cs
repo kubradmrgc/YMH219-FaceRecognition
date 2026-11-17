@@ -5,10 +5,6 @@ using OpenCvSharp;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Görüntüyü Bitmap'e çevirip her yüzün etrafına dikdörtgen ve etiket çizer.
-/// Yazılar GDI+ ile çizilir çünkü Cv2.PutText Türkçe karakterleri (ğ, ş, ı, İ) gösteremez.
-/// </summary>
 public static class FaceOverlayRenderer
 {
     private static readonly Color DetectedColor = Color.Gold;

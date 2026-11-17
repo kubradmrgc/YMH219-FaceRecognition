@@ -4,10 +4,6 @@ using OpenCvSharp;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Gösterilen karedeki yüzleri kırpıp kayıt klasörüne PNG olarak saklar:
-/// yuz-yyyyMMdd-HHmmss-fff-N[-etiket].png
-/// </summary>
 public sealed class FaceCaptureService
 {
     public FaceCaptureService(string directory)
@@ -17,7 +13,6 @@ public sealed class FaceCaptureService
 
     public string DirectoryPath { get; }
 
-    /// <summary>Her yüzü ayrı dosyaya kaydeder ve oluşturulan dosyaların yollarını döndürür.</summary>
     public IReadOnlyList<string> SaveFaces(Mat image, IReadOnlyList<FaceDetection> faces, DateTime time)
     {
         if (image.Empty())
@@ -54,7 +49,6 @@ public sealed class FaceCaptureService
         return saved;
     }
 
-    /// <summary>Etiketteki boşlukları ve dosya adında kullanılamayan karakterleri '_' yapar.</summary>
     private static string ToFilePart(string label)
     {
         char[] invalid = Path.GetInvalidFileNameChars();

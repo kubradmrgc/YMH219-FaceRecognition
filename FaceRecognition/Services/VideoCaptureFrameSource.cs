@@ -2,9 +2,6 @@ using OpenCvSharp;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// OpenCV VideoCapture ile bilgisayar kamerasından kare okur.
-/// </summary>
 public sealed class VideoCaptureFrameSource : IFrameSource
 {
     public const int RequestedWidth = 640;
@@ -20,7 +17,6 @@ public sealed class VideoCaptureFrameSource : IFrameSource
         this.capture = capture;
     }
 
-    /// <summary>Kamerayı açmayı dener; açılamazsa null döner.</summary>
     public static VideoCaptureFrameSource? TryOpen(int index)
     {
         foreach (VideoCaptureAPIs backend in Backends)

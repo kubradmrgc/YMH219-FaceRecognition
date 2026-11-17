@@ -5,9 +5,6 @@ using Mat = OpenCvSharp.Mat;
 
 namespace FaceRecognition;
 
-/// <summary>
-/// Kameradan veya dosyadan alınan görüntüde yüz algılayan ve tanıyan ana pencere.
-/// </summary>
 public partial class MainForm : Form
 {
     private const int BurstSampleCount = 5;
@@ -352,7 +349,6 @@ public partial class MainForm : Form
         statusLabel.Text = "Kamera durduruldu. Son kare ekranda kaldı.";
     }
 
-    /// <summary>Kamera iş parçacığında çalışır: algılama ve çizim burada yapılır, arayüze yalnızca sonuç gönderilir.</summary>
     private void OnCameraFrame(Mat frame)
     {
         // Arayüz önceki kareyi henüz göstermediyse bu kare atlanır; böylece bekleyen kareler birikip belleği doldurmaz.
@@ -446,7 +442,6 @@ public partial class MainForm : Form
         UpdateActiveOperation();
     }
 
-    /// <summary>Eğitim sürerken gösterge her zaman EĞİTİLİYOR durumunu gösterir.</summary>
     private void UpdateIndicator()
     {
         (stateIndicatorLabel.Text, stateIndicatorLabel.BackColor) = training
@@ -513,7 +508,6 @@ public partial class MainForm : Form
         UpdateActiveOperation();
     }
 
-    /// <summary>Gösterilen resmi yeniden işler; kamera açıksa bir sonraki kare zaten güncel ayarlarla işlenir.</summary>
     private void AnalyzeCurrentImage()
     {
         if (currentImage is null || camera.State != CameraState.Stopped)
@@ -552,7 +546,6 @@ public partial class MainForm : Form
         }
     }
 
-    /// <summary>Gösterilen karedeki tek yüzü veri setine ekler ve eklendiği etiketi döndürür.</summary>
     private string AddSampleFromCurrentFrame(string label)
     {
         if (detector is null)
@@ -765,7 +758,6 @@ public partial class MainForm : Form
         }
     }
 
-    /// <summary>Ekranda görünen karedeki yüzleri, gösterilen etiketlerle birlikte kayıt klasörüne yazar.</summary>
     private void SaveFaces()
     {
         if (currentImage is null || currentFaces.Count == 0)
@@ -790,7 +782,6 @@ public partial class MainForm : Form
 
     // ---------------- Algılama ve sonuçlar ----------------
 
-    /// <summary>Hem arayüz hem kamera iş parçacığından çağrılır.</summary>
     private IReadOnlyList<FaceDetection> DetectFaces(Mat image)
     {
         return analyzer?.Analyze(image) ?? Array.Empty<FaceDetection>();
@@ -848,7 +839,6 @@ public partial class MainForm : Form
 
     // ---------------- Yardımcılar ----------------
 
-    /// <summary>Gösterilen resmi değiştirir; önceki Bitmap bellekten atılır.</summary>
     private void SetDisplayImage(Bitmap? bitmap)
     {
         Image? old = imageBox.Image;
@@ -917,7 +907,6 @@ public partial class MainForm : Form
         return MessageBox.Show(this, message, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
     }
 
-    /// <summary>Arka plan iş parçacığından arayüze iş gönderir; pencere kapanıyorsa göndermez ve false döner.</summary>
     private bool RunOnUi(Action action)
     {
         if (IsDisposed || Disposing || !IsHandleCreated)

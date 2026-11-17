@@ -4,10 +4,6 @@ using OpenCvSharp;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Kamerayı arka plan iş parçacığında açıp kareleri okur. Olaylar arka plan iş parçacığından tetiklenir;
-/// arayüz güncellemesi yapacak abonelerin kendi iş parçacıklarına geçmesi gerekir.
-/// </summary>
 public sealed class CameraService : IDisposable
 {
     public const int MaxCameraIndex = 3;
@@ -33,7 +29,6 @@ public sealed class CameraService : IDisposable
         this.openSource = openSource;
     }
 
-    /// <summary>Yeni kare geldiğinde tetiklenir. Mat yalnızca olay süresince geçerlidir; saklanacaksa kopyalanmalıdır.</summary>
     public event Action<Mat>? FrameReady;
 
     public event Action<CameraState>? StateChanged;
@@ -46,7 +41,6 @@ public sealed class CameraService : IDisposable
 
     public TimeSpan LostFrameTimeout { get; init; } = TimeSpan.FromSeconds(2);
 
-    /// <summary>0..<see cref="MaxCameraIndex"/> numaralı kameraları tek tek açmayı dener. Kamerayı kısa süre açtığı için arka planda çağrılmalıdır.</summary>
     public static IReadOnlyList<CameraInfo> FindCameras()
     {
         var found = new List<CameraInfo>();

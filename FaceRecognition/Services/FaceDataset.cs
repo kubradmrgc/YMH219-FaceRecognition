@@ -4,9 +4,6 @@ using OpenCvSharp;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Yerel yüz örneklerini etiket (kişi) başına bir klasörde PNG olarak saklar: dataset\&lt;etiket&gt;\*.png
-/// </summary>
 public sealed class FaceDataset
 {
     public const int MinLabelLength = 2;
@@ -14,7 +11,6 @@ public sealed class FaceDataset
     public const int MinLabelsForTraining = 2;
     public const int RecommendedSamplesPerLabel = 5;
 
-    /// <summary>Tanınmayan yüzler için ayrılmış ad; etiket olarak kullanılamaz.</summary>
     public const string UnknownLabel = "Bilinmeyen";
 
     private const string SamplePattern = "*.png";
@@ -35,7 +31,6 @@ public sealed class FaceDataset
 
     public string DirectoryPath { get; }
 
-    /// <summary>Etiket adını doğrular ve baştaki/sondaki boşlukları atılmış halini döndürür.</summary>
     public static string ValidateLabel(string? name)
     {
         string label = (name ?? string.Empty).Trim();
@@ -69,10 +64,6 @@ public sealed class FaceDataset
         return label;
     }
 
-    /// <summary>
-    /// İki etiketin büyük/küçük harf farkı gözetmeden aynı olup olmadığını söyler. Türkçe kuralı (ı/I, i/İ) ve
-    /// Windows dosya sistemi kuralı birlikte denetlenir; ikisinden biri eşit sayarsa aynı klasöre karşılık gelir.
-    /// </summary>
     public static bool SameLabel(string a, string b) =>
         string.Compare(a, b, Turkish, CompareOptions.IgnoreCase) == 0 ||
         string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
@@ -97,7 +88,6 @@ public sealed class FaceDataset
         }
     }
 
-    /// <summary>Aynı adlı (büyük/küçük harf farkı gözetmeden) mevcut etiketi döndürür.</summary>
     public string? FindLabel(string name) =>
         GetLabels().Select(info => info.Name).FirstOrDefault(existing => SameLabel(existing, name.Trim()));
 
@@ -113,10 +103,6 @@ public sealed class FaceDataset
         return Directory.GetFiles(Path.Combine(DirectoryPath, existing), SamplePattern).OrderBy(f => f, StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>
-    /// Yüz görüntüsünü etiketin klasörüne kaydeder. Etiket büyük/küçük harf farkıyla zaten varsa mevcut etikete eklenir.
-    /// </summary>
-    /// <returns>Örneğin eklendiği etiketin adı.</returns>
     public string AddSample(string label, Mat faceImage)
     {
         string validated = ValidateLabel(label);

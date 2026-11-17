@@ -3,10 +3,6 @@ using OpenCvSharp;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Bir görüntüdeki yüzleri bulur ve tanıma açıksa her yüzü eğitilmiş modelle etiketler.
-/// Hem arayüz hem kamera iş parçacığından çağrılabilir.
-/// </summary>
 public sealed class FaceAnalyzer
 {
     private readonly FaceDetector detector;

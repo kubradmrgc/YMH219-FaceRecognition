@@ -3,9 +3,6 @@ using Size = OpenCvSharp.Size;
 
 namespace FaceRecognition.Models;
 
-/// <summary>
-/// Dosyadan okunan resim. Resim çok büyükse <see cref="Image"/> küçültülmüş kopyadır.
-/// </summary>
 public sealed class LoadedImage : IDisposable
 {
     public LoadedImage(Mat image, Size originalSize)

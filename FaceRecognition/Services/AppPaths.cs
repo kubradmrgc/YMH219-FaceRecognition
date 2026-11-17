@@ -1,9 +1,5 @@
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Uygulamanın dosya konumları. Kişisel yüz görüntüleri ve model depo klasörüne değil,
-/// kullanıcının yerel uygulama verisi klasörüne (%LOCALAPPDATA%) yazılır.
-/// </summary>
 public sealed class AppPaths
 {
     public const string AppFolderName = "YMH219-FaceRecognition";

@@ -3,15 +3,10 @@ using Size = OpenCvSharp.Size;
 
 namespace FaceRecognition.Services;
 
-/// <summary>
-/// Yüz görüntüsünü tanıma için standart biçime getirir: gri ton, 100x100 piksel, histogram eşitleme.
-/// Eğitimde ve tahminde aynı fonksiyon kullanılmalıdır; aksi halde mesafeler anlamsızlaşır.
-/// </summary>
 public static class FacePreprocessor
 {
     public const int FaceSize = 100;
 
-    /// <summary>Haar kutusunu biraz genişletir; alın/çene kesilmesin diye örnek eklerken ve tahminde aynı pay kullanılır.</summary>
     public static Rect Expand(Rect face, Mat image, double margin = 0.18)
     {
         int padX = Math.Max(1, (int)(face.Width * margin));
@@ -19,7 +14,6 @@ public static class FacePreprocessor
         return ClampToImage(new Rect(face.X - padX, face.Y - padY, face.Width + 2 * padX, face.Height + 2 * padY), image);
     }
 
-    /// <summary>Görüntüden yüz bölgesini kesip hazırlar (örnek ekleme ile aynı pay).</summary>
     public static Mat Prepare(Mat image, Rect face)
     {
         Rect bounds = Expand(face, image, 0.12);
@@ -32,7 +26,6 @@ public static class FacePreprocessor
         return Prepare(crop);
     }
 
-    /// <summary>Kesilmiş bir yüz görüntüsünü hazırlar.</summary>
     public static Mat Prepare(Mat faceImage)
     {
         using var gray = new Mat();
