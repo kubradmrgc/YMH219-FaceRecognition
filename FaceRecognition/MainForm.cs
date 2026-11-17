@@ -17,7 +17,11 @@ public partial class MainForm : Form
     private readonly FaceDataset dataset;
     private readonly FaceDetector? detector;
     private readonly string? detectorError;
+    private readonly FaceRecognizerService recognizer;
+    private readonly FaceAnalyzer? analyzer;
     private readonly CameraService camera;
+    private string? modelError;
+    private bool training;
     private readonly Stopwatch fpsWatch = new();
     private readonly System.Windows.Forms.Timer burstTimer = new() { Interval = 700 };
     private int fpsFrames;
@@ -54,6 +58,12 @@ public partial class MainForm : Form
             detectorError = ex.Message;
         }
 
+        recognizer = new FaceRecognizerService(paths) { Threshold = thresholdTrackBar.Value };
+        if (detector is not null)
+        {
+            analyzer = new FaceAnalyzer(detector, recognizer);
+        }
+
         cameraCombo.Items.Add(new CameraInfo(0));
         cameraCombo.SelectedIndex = 0;
 
@@ -80,17 +90,23 @@ public partial class MainForm : Form
             UpdateSampleButtons();
         };
 
-        foreach (Control control in new Control[] { recognitionCheckBox, thresholdTrackBar, saveFacesButton, openCapturesButton, trainButton })
+        trainButton.Click += async (_, _) => await TrainAsync();
+        recognitionCheckBox.CheckedChanged += (_, _) => OnRecognitionToggled();
+        thresholdTrackBar.ValueChanged += (_, _) => OnThresholdChanged();
+
+        foreach (Control control in new Control[] { saveFacesButton, openCapturesButton })
         {
             control.Enabled = false;
         }
 
+        UpdateThresholdLabel();
         UpdateCameraState(CameraState.Stopped);
         UpdateResults(currentFaces);
         RefreshLabels();
         statusLabel.Text = detector is null
             ? "Yüz algılama devre dışı (Haar cascade yüklenemedi). Görüntüler yine de gösterilebilir."
             : "Hazır. Kamerayı başlatın veya 'Görüntü Seç...' ile bir resim açın.";
+        LoadModel();
     }
 
     protected override void OnShown(EventArgs e)
@@ -100,6 +116,160 @@ public partial class MainForm : Form
         {
             ShowError(detectorError + "\n\nUygulama açık kalacak ancak yüz algılama devre dışı.");
         }
+        if (modelError is not null)
+        {
+            ShowWarning(modelError);
+        }
+    }
+
+    // ---------------- Model ----------------
+
+    private void LoadModel()
+    {
+        try
+        {
+            if (recognizer.LoadIfExists())
+            {
+                recognitionCheckBox.Checked = analyzer is not null;
+                statusLabel.Text = $"Kayıtlı model yüklendi ({recognizer.Info!.LabelCount} etiket, {recognizer.Info.SampleCount} örnek).";
+            }
+            else
+            {
+                statusLabel.Text = "Model bulunamadı, önce eğitin: 'Veri Ekle / Eğitim' sekmesinden en az 2 kişiye örnek ekleyip 'Modeli Eğit'e basın.";
+            }
+        }
+        catch (FaceAppException ex)
+        {
+            modelError = ex.Message;
+            statusLabel.Text = ex.Message.Split('\n')[0];
+        }
+        UpdateModelStatus();
+    }
+
+    private async Task TrainAsync()
+    {
+        IReadOnlyList<LabelInfo> labels = dataset.GetLabels();
+        int usable = labels.Count(l => l.SampleCount > 0);
+        if (usable < FaceDataset.MinLabelsForTraining)
+        {
+            ShowWarning($"Eğitim için örneği olan en az {FaceDataset.MinLabelsForTraining} etiket gerekir (şu an {usable}).\n\n" +
+                        "Kendi yüzünüz ve bir gönüllü için (ya da kendi yüzünüzün farklı koşulları için iki ayrı etiketle) örnek ekleyin.");
+            return;
+        }
+
+        var few = labels.Where(l => l.SampleCount is > 0 and < FaceDataset.RecommendedSamplesPerLabel).ToList();
+        if (few.Count > 0 && !Confirm(
+                $"Şu etiketlerde önerilen {FaceDataset.RecommendedSamplesPerLabel} örnekten az var: " +
+                $"{string.Join(", ", few.Select(l => $"{l.Name} ({l.SampleCount})"))}.\nAz örnekle tanıma doğruluğu düşük olur.\n\nYine de eğitilsin mi?",
+                "Az örnek"))
+        {
+            return;
+        }
+
+        training = true;
+        UpdateTrainingState();
+        statusLabel.Text = "Model eğitiliyor...";
+        var watch = Stopwatch.StartNew();
+        try
+        {
+            ModelInfo info = await Task.Run(() => recognizer.Train(dataset));
+            modelError = null;
+            string skipped = info.SkippedSamples > 0 ? $" {info.SkippedSamples} okunamayan örnek atlandı." : "";
+            statusLabel.Text = $"Model eğitildi ve kaydedildi: {info.LabelCount} etiket, {info.SampleCount} örnek ({watch.Elapsed.TotalSeconds:0.0} sn).{skipped}";
+            if (analyzer is not null)
+            {
+                recognitionCheckBox.Checked = true;
+            }
+        }
+        catch (FaceAppException ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            training = false;
+            if (!IsDisposed)
+            {
+                UpdateTrainingState();
+                AnalyzeCurrentImage();
+            }
+        }
+    }
+
+    private void UpdateTrainingState()
+    {
+        trainButton.Text = training ? "Eğitiliyor..." : "Modeli Eğit";
+        UpdateModelStatus();
+        UpdateSampleButtons();
+        UpdateIndicator();
+        UpdateActiveOperation();
+    }
+
+    private void UpdateModelStatus()
+    {
+        ModelInfo? info = recognizer.Info;
+        if (training)
+        {
+            modelStatusLabel.Text = "Model: eğitiliyor...";
+            modelStatusLabel.ForeColor = Color.DarkOrange;
+        }
+        else if (info is null)
+        {
+            modelStatusLabel.Text = modelError is null ? "Model: Eğitilmemiş" : "Model: hatalı, yeniden eğitin";
+            modelStatusLabel.ForeColor = Color.Firebrick;
+        }
+        else
+        {
+            bool outdated = IsModelOutdated(info);
+            modelStatusLabel.Text = $"Model: Eğitilmiş ({info.LabelCount} etiket, {info.SampleCount} örnek)" + (outdated ? " – veri değişti, yeniden eğitin" : "");
+            modelStatusLabel.ForeColor = outdated ? Color.DarkOrange : Color.SeaGreen;
+        }
+        recognitionCheckBox.Enabled = analyzer is not null;
+    }
+
+    private bool IsModelOutdated(ModelInfo info)
+    {
+        try
+        {
+            var current = dataset.GetLabels().Where(l => l.SampleCount > 0).ToList();
+            bool sameNames = current.Select(l => l.Name).Order(StringComparer.Ordinal)
+                .SequenceEqual(info.Labels.Select(l => l.Name).Order(StringComparer.Ordinal));
+            return !sameNames || current.Sum(l => l.SampleCount) != info.SampleCount + info.SkippedSamples;
+        }
+        catch (FaceAppException)
+        {
+            return false;
+        }
+    }
+
+    private void OnRecognitionToggled()
+    {
+        if (recognitionCheckBox.Checked && !recognizer.IsTrained)
+        {
+            recognitionCheckBox.Checked = false;
+            ShowWarning(modelError is null
+                ? "Model bulunamadı, önce eğitin.\n\n'Veri Ekle / Eğitim' sekmesinde en az 2 etikete örnek ekleyip 'Modeli Eğit' düğmesine basın."
+                : modelError);
+            return;
+        }
+
+        if (analyzer is not null)
+        {
+            analyzer.RecognitionEnabled = recognitionCheckBox.Checked;
+        }
+        AnalyzeCurrentImage();
+    }
+
+    private void OnThresholdChanged()
+    {
+        recognizer.Threshold = thresholdTrackBar.Value;
+        UpdateThresholdLabel();
+        AnalyzeCurrentImage();
+    }
+
+    private void UpdateThresholdLabel()
+    {
+        thresholdLabel.Text = $"Eşik (en fazla mesafe): {thresholdTrackBar.Value}  →  güven en az %{Math.Max(0, 100 - thresholdTrackBar.Value)}";
     }
 
     // ---------------- Kamera ----------------
@@ -256,14 +426,7 @@ public partial class MainForm : Form
         stopCameraButton.Enabled = state is CameraState.Starting or CameraState.Running;
         findCamerasButton.Enabled = stopped && !searchingCameras;
         cameraCombo.Enabled = stopped && !searchingCameras;
-
-        (stateIndicatorLabel.Text, stateIndicatorLabel.BackColor) = state switch
-        {
-            CameraState.Starting => ("● KAMERA AÇILIYOR", Color.Goldenrod),
-            CameraState.Running => ("● KAMERA AÇIK", Color.SeaGreen),
-            CameraState.Stopping => ("● KAMERA KAPANIYOR", Color.Goldenrod),
-            _ => ("■ HAZIR", Color.DimGray)
-        };
+        UpdateIndicator();
 
         if (state == CameraState.Running)
         {
@@ -281,6 +444,20 @@ public partial class MainForm : Form
         }
         UpdateSampleButtons();
         UpdateActiveOperation();
+    }
+
+    /// <summary>Eğitim sürerken gösterge her zaman EĞİTİLİYOR durumunu gösterir.</summary>
+    private void UpdateIndicator()
+    {
+        (stateIndicatorLabel.Text, stateIndicatorLabel.BackColor) = training
+            ? ("◆ EĞİTİLİYOR", Color.DarkOrange)
+            : camera.State switch
+            {
+                CameraState.Starting => ("● KAMERA AÇILIYOR", Color.Goldenrod),
+                CameraState.Running => ("● KAMERA AÇIK", Color.SeaGreen),
+                CameraState.Stopping => ("● KAMERA KAPANIYOR", Color.Goldenrod),
+                _ => ("■ HAZIR", Color.DimGray)
+            };
     }
 
     // ---------------- Resim ----------------
@@ -336,9 +513,10 @@ public partial class MainForm : Form
         UpdateActiveOperation();
     }
 
+    /// <summary>Gösterilen resmi yeniden işler; kamera açıksa bir sonraki kare zaten güncel ayarlarla işlenir.</summary>
     private void AnalyzeCurrentImage()
     {
-        if (currentImage is null)
+        if (currentImage is null || camera.State != CameraState.Stopped)
         {
             return;
         }
@@ -534,6 +712,7 @@ public partial class MainForm : Form
 
         UpdateDatasetInfo(labels);
         UpdateSampleButtons();
+        UpdateModelStatus();
     }
 
     private void UpdateDatasetInfo(IReadOnlyList<LabelInfo> labels)
@@ -564,11 +743,12 @@ public partial class MainForm : Form
 
     private void UpdateSampleButtons()
     {
-        bool bursting = burstLabel is not null;
-        addSampleButton.Enabled = detector is not null && currentImage is not null && !bursting;
-        addFiveSamplesButton.Enabled = detector is not null && camera.State == CameraState.Running && !bursting;
-        deleteLabelButton.Enabled = labelsList.SelectedItems.Count > 0 && !bursting;
-        labelNameTextBox.ReadOnly = bursting;
+        bool busy = burstLabel is not null || training;
+        addSampleButton.Enabled = detector is not null && currentImage is not null && !busy;
+        addFiveSamplesButton.Enabled = detector is not null && camera.State == CameraState.Running && !busy;
+        deleteLabelButton.Enabled = labelsList.SelectedItems.Count > 0 && !busy;
+        trainButton.Enabled = !busy;
+        labelNameTextBox.ReadOnly = busy;
     }
 
     private void OpenFolder(string folder)
@@ -589,11 +769,7 @@ public partial class MainForm : Form
     /// <summary>Hem arayüz hem kamera iş parçacığından çağrılır.</summary>
     private IReadOnlyList<FaceDetection> DetectFaces(Mat image)
     {
-        if (detector is null)
-        {
-            return Array.Empty<FaceDetection>();
-        }
-        return detector.Detect(image).Select(rect => new FaceDetection(rect)).ToArray();
+        return analyzer?.Analyze(image) ?? Array.Empty<FaceDetection>();
     }
 
     private string DescribeFaceCount(int count)
@@ -611,19 +787,36 @@ public partial class MainForm : Form
             : currentImage is null ? "Algılanan yüz: -"
             : $"Algılanan yüz: {faces.Count}";
 
-        var rows = faces.Select((face, i) => new[] { (i + 1).ToString(), face.Caption(i + 1), "-", "-" }).ToList();
+        var rows = faces.Select((face, i) => face.Recognition is { } r
+            ? new[] { (i + 1).ToString(), r.DisplayLabel, r.Distance.ToString("F1"), $"%{r.Confidence:0}" }
+            : new[] { (i + 1).ToString(), face.Caption(i + 1), "-", "-" }).ToList();
         string signature = string.Join("|", rows.Select(r => string.Join(";", r)));
         if (signature == resultsSignature)
         {
             return;
         }
-
         resultsSignature = signature;
+
+        // Satır sayısı aynıysa hücreler yerinde güncellenir; kamera açıkken liste titremez.
         resultsList.BeginUpdate();
-        resultsList.Items.Clear();
-        foreach (string[] row in rows)
+        if (resultsList.Items.Count != rows.Count)
         {
-            resultsList.Items.Add(new ListViewItem(row));
+            resultsList.Items.Clear();
+            foreach (string[] row in rows)
+            {
+                resultsList.Items.Add(new ListViewItem(row));
+            }
+        }
+        for (int i = 0; i < rows.Count; i++)
+        {
+            ListViewItem item = resultsList.Items[i];
+            for (int c = 0; c < rows[i].Length; c++)
+            {
+                item.SubItems[c].Text = rows[i][c];
+            }
+            item.ForeColor = faces[i].Recognition is null ? SystemColors.WindowText
+                : faces[i].Recognition!.IsKnown ? Color.SeaGreen
+                : Color.OrangeRed;
         }
         resultsList.EndUpdate();
     }
@@ -662,6 +855,10 @@ public partial class MainForm : Form
         if (burstLabel is not null)
         {
             operations.Add($"Örnek toplanıyor ({burstAdded}/{BurstSampleCount})");
+        }
+        if (training)
+        {
+            operations.Add("Model eğitiliyor");
         }
         if (operations.Count == 0 && currentImage is not null)
         {
@@ -714,6 +911,17 @@ public partial class MainForm : Form
         }
     }
 
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (training && e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            ShowWarning("Model eğitimi sürüyor. Eğitim bitince pencereyi kapatabilirsiniz.");
+            return;
+        }
+        base.OnFormClosing(e);
+    }
+
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         burstTimer.Dispose();
@@ -721,6 +929,7 @@ public partial class MainForm : Form
         camera.Dispose();
         SetDisplayImage(null);
         currentImage?.Dispose();
+        recognizer.Dispose();
         detector?.Dispose();
         base.OnFormClosed(e);
     }

@@ -12,6 +12,8 @@ namespace FaceRecognition.Services;
 public static class FaceOverlayRenderer
 {
     private static readonly Color DetectedColor = Color.Gold;
+    private static readonly Color KnownColor = Color.LimeGreen;
+    private static readonly Color UnknownColor = Color.OrangeRed;
 
     public static Bitmap Render(Mat image, IReadOnlyList<FaceDetection> faces)
     {
@@ -33,8 +35,11 @@ public static class FaceOverlayRenderer
         for (int i = 0; i < faces.Count; i++)
         {
             FaceDetection face = faces[i];
+            Color color = face.Recognition is null ? DetectedColor
+                : face.Recognition.IsKnown ? KnownColor
+                : UnknownColor;
             var box = new Rectangle(face.Bounds.X, face.Bounds.Y, face.Bounds.Width, face.Bounds.Height);
-            using (var pen = new Pen(DetectedColor, penWidth))
+            using (var pen = new Pen(color, penWidth))
             {
                 g.DrawRectangle(pen, box);
             }
@@ -44,11 +49,12 @@ public static class FaceOverlayRenderer
             float labelHeight = textSize.Height + 2;
             float labelTop = box.Top - labelHeight >= 0 ? box.Top - labelHeight : box.Bottom;
             var labelBox = new RectangleF(box.Left - penWidth / 2, labelTop, textSize.Width + 6, labelHeight);
-            using (var background = new SolidBrush(DetectedColor))
+            using (var background = new SolidBrush(color))
             {
                 g.FillRectangle(background, labelBox);
             }
-            g.DrawString(caption, font, Brushes.Black, labelBox.Left + 3, labelBox.Top + 1);
+            Brush text = color == UnknownColor ? Brushes.White : Brushes.Black;
+            g.DrawString(caption, font, text, labelBox.Left + 3, labelBox.Top + 1);
         }
         return bitmap;
     }
