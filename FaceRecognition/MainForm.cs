@@ -9,13 +9,30 @@ namespace FaceRecognition;
 /// </summary>
 public partial class MainForm : Form
 {
+    private readonly FaceDetector? detector;
+    private readonly string? detectorError;
     private Mat? currentImage;
     private string? currentImageName;
+    private IReadOnlyList<FaceDetection> currentFaces = Array.Empty<FaceDetection>();
+    private string resultsSignature = string.Empty;
 
-    public MainForm(string openCvVersion)
+    public MainForm(string openCvVersion) : this(openCvVersion, FaceDetector.DefaultCascadePath)
+    {
+    }
+
+    protected MainForm(string openCvVersion, string cascadePath)
     {
         BuildLayout();
         versionLabel.Text = $"OpenCV {openCvVersion}";
+
+        try
+        {
+            detector = new FaceDetector(cascadePath);
+        }
+        catch (FaceAppException ex)
+        {
+            detectorError = ex.Message;
+        }
 
         selectImageButton.Click += (_, _) => SelectImage();
 
@@ -30,7 +47,19 @@ public partial class MainForm : Form
         }
 
         UpdateActiveOperation();
-        statusLabel.Text = "Hazır. 'Görüntü Seç...' ile bir resim açabilirsiniz.";
+        UpdateResults(currentFaces);
+        statusLabel.Text = detector is null
+            ? "Yüz algılama devre dışı (Haar cascade yüklenemedi). Resimler yine de görüntülenebilir."
+            : "Hazır. 'Görüntü Seç...' ile bir resim açabilirsiniz.";
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        if (detectorError is not null)
+        {
+            ShowError(detectorError + "\n\nUygulama açık kalacak ancak yüz algılama devre dışı.");
+        }
     }
 
     private void SelectImage()
@@ -63,13 +92,73 @@ public partial class MainForm : Form
         currentImage?.Dispose();
         currentImage = loaded.Image;
         currentImageName = Path.GetFileName(path);
-        SetDisplayImage(MatBitmapConverter.ToBitmap(currentImage));
+        AnalyzeCurrentImage();
 
         string size = $"{loaded.OriginalSize.Width}x{loaded.OriginalSize.Height}";
-        statusLabel.Text = loaded.WasResized
-            ? $"{currentImageName} açıldı ({size}; işlem için {currentImage.Width}x{currentImage.Height} boyutuna küçültüldü)."
-            : $"{currentImageName} açıldı ({size}).";
+        string resized = loaded.WasResized ? $"; işlem için {currentImage.Width}x{currentImage.Height} boyutuna küçültüldü" : "";
+        statusLabel.Text = $"{currentImageName} açıldı ({size}{resized}). {DescribeFaceCount(currentFaces.Count)}";
         UpdateActiveOperation();
+    }
+
+    private void AnalyzeCurrentImage()
+    {
+        if (currentImage is null)
+        {
+            return;
+        }
+
+        Cursor = Cursors.WaitCursor;
+        try
+        {
+            currentFaces = DetectFaces(currentImage);
+            SetDisplayImage(FaceOverlayRenderer.Render(currentImage, currentFaces));
+            UpdateResults(currentFaces);
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+        }
+    }
+
+    private IReadOnlyList<FaceDetection> DetectFaces(Mat image)
+    {
+        if (detector is null)
+        {
+            return Array.Empty<FaceDetection>();
+        }
+        return detector.Detect(image).Select(rect => new FaceDetection(rect)).ToArray();
+    }
+
+    private string DescribeFaceCount(int count)
+    {
+        if (detector is null)
+        {
+            return "Yüz algılama devre dışı.";
+        }
+        return count == 0 ? "Yüz bulunamadı." : $"{count} yüz algılandı.";
+    }
+
+    private void UpdateResults(IReadOnlyList<FaceDetection> faces)
+    {
+        faceCountLabel.Text = detector is null
+            ? "Algılanan yüz: - (algılama devre dışı)"
+            : $"Algılanan yüz: {faces.Count}";
+
+        var rows = faces.Select((face, i) => new[] { (i + 1).ToString(), face.Caption(i + 1), "-", "-" }).ToList();
+        string signature = string.Join("|", rows.Select(r => string.Join(";", r)));
+        if (signature == resultsSignature)
+        {
+            return;
+        }
+
+        resultsSignature = signature;
+        resultsList.BeginUpdate();
+        resultsList.Items.Clear();
+        foreach (string[] row in rows)
+        {
+            resultsList.Items.Add(new ListViewItem(row));
+        }
+        resultsList.EndUpdate();
     }
 
     /// <summary>Gösterilen resmi değiştirir; önceki Bitmap bellekten atılır.</summary>
@@ -109,6 +198,7 @@ public partial class MainForm : Form
     {
         SetDisplayImage(null);
         currentImage?.Dispose();
+        detector?.Dispose();
         base.OnFormClosed(e);
     }
 }
