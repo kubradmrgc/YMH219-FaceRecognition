@@ -570,7 +570,8 @@ public partial class MainForm : Form
                 : $"Karede {currentFaces.Count} yüz var. Örnek eklemek için karede tam olarak bir yüz olmalı.");
         }
 
-        using var crop = new Mat(currentImage, FacePreprocessor.ClampToImage(currentFaces[0].Bounds, currentImage));
+        // FacePreprocessor.Prepare ile aynı pay: alın/çene kesilmesin.
+        using var crop = new Mat(currentImage, FacePreprocessor.Expand(currentFaces[0].Bounds, currentImage, 0.12));
         return dataset.AddSample(label, crop);
     }
 

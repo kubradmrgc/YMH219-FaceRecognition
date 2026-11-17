@@ -12,7 +12,8 @@ namespace FaceRecognition.Services;
 /// </summary>
 public sealed class FaceRecognizerService : IDisposable
 {
-    public const double DefaultThreshold = 75;
+    /// <summary>Canlı kamerada ışık ve kutu kayması mesafeyi yükseltir; 95 daha toleranslıdır.</summary>
+    public const double DefaultThreshold = 95;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

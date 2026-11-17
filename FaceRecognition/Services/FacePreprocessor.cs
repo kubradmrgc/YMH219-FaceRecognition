@@ -11,10 +11,18 @@ public static class FacePreprocessor
 {
     public const int FaceSize = 100;
 
-    /// <summary>Görüntüden yüz bölgesini kesip hazırlar.</summary>
+    /// <summary>Haar kutusunu biraz genişletir; alın/çene kesilmesin diye örnek eklerken ve tahminde aynı pay kullanılır.</summary>
+    public static Rect Expand(Rect face, Mat image, double margin = 0.18)
+    {
+        int padX = Math.Max(1, (int)(face.Width * margin));
+        int padY = Math.Max(1, (int)(face.Height * margin));
+        return ClampToImage(new Rect(face.X - padX, face.Y - padY, face.Width + 2 * padX, face.Height + 2 * padY), image);
+    }
+
+    /// <summary>Görüntüden yüz bölgesini kesip hazırlar (örnek ekleme ile aynı pay).</summary>
     public static Mat Prepare(Mat image, Rect face)
     {
-        Rect bounds = ClampToImage(face, image);
+        Rect bounds = Expand(face, image, 0.12);
         if (bounds.Width == 0 || bounds.Height == 0)
         {
             throw new ArgumentException("Yüz bölgesi görüntünün dışında.", nameof(face));

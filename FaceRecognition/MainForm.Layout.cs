@@ -61,13 +61,13 @@ public partial class MainForm
         HeaderStyle = ColumnHeaderStyle.Nonclickable
     };
     private readonly CheckBox recognitionCheckBox = new() { Name = "recognitionCheckBox", Text = "Tanıma açık (eğitilmiş model ile etiket tahmini)", AutoSize = true, Margin = new Padding(3, 8, 3, 3) };
-    private readonly Label thresholdLabel = new() { Name = "thresholdLabel", Text = "Eşik (en fazla mesafe): 75", AutoSize = true, Margin = new Padding(3, 6, 3, 0) };
+    private readonly Label thresholdLabel = new() { Name = "thresholdLabel", Text = "Eşik (en fazla mesafe): 95", AutoSize = true, Margin = new Padding(3, 6, 3, 0) };
     private readonly TrackBar thresholdTrackBar = new()
     {
         Name = "thresholdTrackBar",
         Minimum = 20,
         Maximum = 150,
-        Value = 75,
+        Value = 95,
         TickFrequency = 10,
         SmallChange = 1,
         LargeChange = 5,

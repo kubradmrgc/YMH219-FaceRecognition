@@ -482,3 +482,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Kişisel yüz verisi ve model depoya girmemeli (uygulama bunları %LOCALAPPDATA%\YMH219-FaceRecognition altında tutar)
+dataset/
+captures/
+lbph-model.yml
+labels.json
