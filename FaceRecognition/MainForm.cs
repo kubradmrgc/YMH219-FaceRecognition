@@ -10,30 +10,44 @@ namespace FaceRecognition;
 /// </summary>
 public partial class MainForm : Form
 {
+    private const int BurstSampleCount = 5;
+    private const int BurstMaxAttempts = 20;
+
+    private readonly AppPaths paths;
+    private readonly FaceDataset dataset;
     private readonly FaceDetector? detector;
     private readonly string? detectorError;
-    private readonly CameraService camera = new();
+    private readonly CameraService camera;
     private readonly Stopwatch fpsWatch = new();
+    private readonly System.Windows.Forms.Timer burstTimer = new() { Interval = 700 };
     private int fpsFrames;
     private int framePending;
+    private int frameSequence;
     private bool searchingCameras;
     private Mat? currentImage;
     private string? currentImageName;
     private IReadOnlyList<FaceDetection> currentFaces = Array.Empty<FaceDetection>();
     private string resultsSignature = string.Empty;
+    private string? burstLabel;
+    private int burstAdded;
+    private int burstAttempts;
+    private int burstLastFrame;
 
-    public MainForm(string openCvVersion) : this(openCvVersion, FaceDetector.DefaultCascadePath)
+    public MainForm(string openCvVersion) : this(openCvVersion, AppPaths.Default, new CameraService())
     {
     }
 
-    protected MainForm(string openCvVersion, string cascadePath)
+    protected MainForm(string openCvVersion, AppPaths paths, CameraService camera)
     {
+        this.paths = paths;
+        this.camera = camera;
+        dataset = new FaceDataset(paths.DatasetDirectory);
         BuildLayout();
         versionLabel.Text = $"OpenCV {openCvVersion}";
 
         try
         {
-            detector = new FaceDetector(cascadePath);
+            detector = new FaceDetector(paths.CascadePath);
         }
         catch (FaceAppException ex)
         {
@@ -52,17 +66,28 @@ public partial class MainForm : Form
         camera.StateChanged += state => RunOnUi(() => UpdateCameraState(state));
         camera.Failed += message => RunOnUi(() => ShowError(message));
 
-        foreach (Control control in new Control[]
-                 {
-                     recognitionCheckBox, thresholdTrackBar, saveFacesButton, openCapturesButton,
-                     labelNameTextBox, addSampleButton, addFiveSamplesButton, deleteLabelButton, openDatasetButton, trainButton
-                 })
+        addSampleButton.Click += (_, _) => AddSample();
+        addFiveSamplesButton.Click += (_, _) => StartBurst();
+        burstTimer.Tick += (_, _) => OnBurstTick();
+        deleteLabelButton.Click += (_, _) => DeleteSelectedLabel();
+        openDatasetButton.Click += (_, _) => OpenFolder(dataset.DirectoryPath);
+        labelsList.SelectedIndexChanged += (_, _) =>
+        {
+            if (labelsList.SelectedItems.Count > 0 && labelsList.SelectedItems[0].Tag is LabelInfo info)
+            {
+                labelNameTextBox.Text = info.Name;
+            }
+            UpdateSampleButtons();
+        };
+
+        foreach (Control control in new Control[] { recognitionCheckBox, thresholdTrackBar, saveFacesButton, openCapturesButton, trainButton })
         {
             control.Enabled = false;
         }
 
         UpdateCameraState(CameraState.Stopped);
         UpdateResults(currentFaces);
+        RefreshLabels();
         statusLabel.Text = detector is null
             ? "Yüz algılama devre dışı (Haar cascade yüklenemedi). Görüntüler yine de gösterilebilir."
             : "Hazır. Kamerayı başlatın veya 'Görüntü Seç...' ile bir resim açın.";
@@ -203,6 +228,7 @@ public partial class MainForm : Form
         currentImage = frame;
         currentImageName = null;
         currentFaces = faces;
+        frameSequence++;
         SetDisplayImage(bitmap);
         UpdateResults(faces);
         CountFrame();
@@ -248,7 +274,12 @@ public partial class MainForm : Form
             fpsWatch.Reset();
             fpsFrames = 0;
             fpsLabel.Text = "FPS: -";
+            if (burstLabel is not null)
+            {
+                StopBurst($"Kamera kapandığı için örnek toplama durdu ({burstAdded}/{BurstSampleCount} örnek eklendi).");
+            }
         }
+        UpdateSampleButtons();
         UpdateActiveOperation();
     }
 
@@ -301,6 +332,7 @@ public partial class MainForm : Form
         string size = $"{loaded.OriginalSize.Width}x{loaded.OriginalSize.Height}";
         string resized = loaded.WasResized ? $"; işlem için {currentImage.Width}x{currentImage.Height} boyutuna küçültüldü" : "";
         statusLabel.Text = $"{currentImageName} açıldı ({size}{resized}). {DescribeFaceCount(currentFaces.Count)}";
+        UpdateSampleButtons();
         UpdateActiveOperation();
     }
 
@@ -321,6 +353,234 @@ public partial class MainForm : Form
         finally
         {
             Cursor = Cursors.Default;
+        }
+    }
+
+    // ---------------- Veri seti ----------------
+
+    private void AddSample()
+    {
+        try
+        {
+            string label = FaceDataset.ValidateLabel(labelNameTextBox.Text);
+            string used = AddSampleFromCurrentFrame(label);
+            labelNameTextBox.Text = used;
+            RefreshLabels();
+            statusLabel.Text = $"Örnek '{used}' etiketine eklendi (toplam {dataset.CountSamples(used)} örnek).";
+        }
+        catch (FaceAppException ex)
+        {
+            ShowWarning(ex.Message);
+        }
+    }
+
+    /// <summary>Gösterilen karedeki tek yüzü veri setine ekler ve eklendiği etiketi döndürür.</summary>
+    private string AddSampleFromCurrentFrame(string label)
+    {
+        if (detector is null)
+        {
+            throw new FaceAppException("Yüz algılama devre dışı olduğu için örnek eklenemiyor (Haar cascade yüklenemedi).");
+        }
+        if (currentImage is null)
+        {
+            throw new FaceAppException("Önce kamerayı başlatın veya bir resim açın.");
+        }
+        if (currentFaces.Count != 1)
+        {
+            throw new FaceAppException(currentFaces.Count == 0
+                ? "Karede yüz bulunamadı. Yüzünüzü kameraya doğru çevirin veya yüz içeren bir resim seçin."
+                : $"Karede {currentFaces.Count} yüz var. Örnek eklemek için karede tam olarak bir yüz olmalı.");
+        }
+
+        using var crop = new Mat(currentImage, FacePreprocessor.ClampToImage(currentFaces[0].Bounds, currentImage));
+        return dataset.AddSample(label, crop);
+    }
+
+    private void StartBurst()
+    {
+        string label;
+        try
+        {
+            label = FaceDataset.ValidateLabel(labelNameTextBox.Text);
+        }
+        catch (FaceAppException ex)
+        {
+            ShowWarning(ex.Message);
+            return;
+        }
+
+        if (camera.State != CameraState.Running)
+        {
+            ShowWarning($"'{BurstSampleCount} Örnek Çek' yalnızca kamera açıkken kullanılabilir. Önce kamerayı başlatın.");
+            return;
+        }
+
+        burstLabel = label;
+        burstAdded = 0;
+        burstAttempts = 0;
+        burstLastFrame = -1;
+        burstTimer.Start();
+        statusLabel.Text = $"'{label}' için örnek toplanıyor: 0/{BurstSampleCount}. Başınızı hafifçe sağa sola çevirin.";
+        UpdateSampleButtons();
+        UpdateActiveOperation();
+    }
+
+    private void OnBurstTick()
+    {
+        if (burstLabel is null)
+        {
+            return;
+        }
+
+        burstAttempts++;
+        if (frameSequence != burstLastFrame && currentFaces.Count == 1)
+        {
+            try
+            {
+                burstLabel = AddSampleFromCurrentFrame(burstLabel);
+                burstAdded++;
+                burstLastFrame = frameSequence;
+                RefreshLabels();
+            }
+            catch (FaceAppException ex)
+            {
+                StopBurst(null);
+                ShowWarning(ex.Message);
+                return;
+            }
+        }
+
+        if (burstAdded >= BurstSampleCount)
+        {
+            StopBurst($"{BurstSampleCount} örnek '{burstLabel}' etiketine eklendi (toplam {dataset.CountSamples(burstLabel)} örnek).");
+        }
+        else if (burstAttempts >= BurstMaxAttempts)
+        {
+            StopBurst($"Örnek toplama durdu: {burstAdded}/{BurstSampleCount} örnek eklenebildi. Karede tam olarak bir yüz olduğundan emin olun.");
+        }
+        else
+        {
+            statusLabel.Text = $"'{burstLabel}' için örnek toplanıyor: {burstAdded}/{BurstSampleCount}" +
+                               (currentFaces.Count == 1 ? "" : $" (karede {currentFaces.Count} yüz var, bekleniyor)");
+            UpdateActiveOperation();
+        }
+    }
+
+    private void StopBurst(string? message)
+    {
+        burstTimer.Stop();
+        burstLabel = null;
+        if (message is not null)
+        {
+            statusLabel.Text = message;
+        }
+        UpdateSampleButtons();
+        UpdateActiveOperation();
+    }
+
+    private void DeleteSelectedLabel()
+    {
+        if (labelsList.SelectedItems.Count == 0 || labelsList.SelectedItems[0].Tag is not LabelInfo info)
+        {
+            ShowWarning("Silmek için listeden bir etiket seçin.");
+            return;
+        }
+
+        if (!Confirm($"'{info.Name}' etiketi ve {info.SampleCount} örnek yüz görüntüsü kalıcı olarak silinecek.\n\nDevam edilsin mi?", "Etiketi Sil"))
+        {
+            return;
+        }
+
+        try
+        {
+            dataset.DeleteLabel(info.Name);
+            labelNameTextBox.Clear();
+            statusLabel.Text = $"'{info.Name}' etiketi ve {info.SampleCount} örnek silindi.";
+        }
+        catch (FaceAppException ex)
+        {
+            ShowWarning(ex.Message);
+        }
+        RefreshLabels();
+    }
+
+    private void RefreshLabels()
+    {
+        IReadOnlyList<LabelInfo> labels;
+        try
+        {
+            labels = dataset.GetLabels();
+        }
+        catch (FaceAppException ex)
+        {
+            labels = Array.Empty<LabelInfo>();
+            statusLabel.Text = ex.Message.Split('\n')[0];
+        }
+
+        string? selected = (labelsList.SelectedItems.Count > 0 ? labelsList.SelectedItems[0].Tag as LabelInfo : null)?.Name;
+        labelsList.BeginUpdate();
+        labelsList.Items.Clear();
+        foreach (LabelInfo info in labels)
+        {
+            var item = new ListViewItem(new[] { info.Name, info.SampleCount.ToString() }) { Tag = info };
+            if (info.SampleCount < FaceDataset.RecommendedSamplesPerLabel)
+            {
+                item.ForeColor = Color.DarkOrange;
+            }
+            labelsList.Items.Add(item);
+            item.Selected = info.Name == selected;
+        }
+        labelsList.EndUpdate();
+
+        UpdateDatasetInfo(labels);
+        UpdateSampleButtons();
+    }
+
+    private void UpdateDatasetInfo(IReadOnlyList<LabelInfo> labels)
+    {
+        int total = labels.Sum(l => l.SampleCount);
+        var usable = labels.Where(l => l.SampleCount > 0).ToList();
+        var few = usable.Where(l => l.SampleCount < FaceDataset.RecommendedSamplesPerLabel).ToList();
+        string summary = $"{labels.Count} etiket, toplam {total} örnek.";
+
+        if (usable.Count < FaceDataset.MinLabelsForTraining)
+        {
+            datasetInfoLabel.Text = $"{summary} Eğitim için örneği olan en az {FaceDataset.MinLabelsForTraining} etiket gerekir " +
+                                    $"(etiket başına en az {FaceDataset.RecommendedSamplesPerLabel} örnek önerilir).";
+            datasetInfoLabel.ForeColor = Color.Firebrick;
+        }
+        else if (few.Count > 0)
+        {
+            datasetInfoLabel.Text = $"{summary} Eğitilebilir; ancak şu etiketlerde önerilen {FaceDataset.RecommendedSamplesPerLabel} örnekten az var: " +
+                                    string.Join(", ", few.Select(l => $"{l.Name} ({l.SampleCount})"));
+            datasetInfoLabel.ForeColor = Color.DarkOrange;
+        }
+        else
+        {
+            datasetInfoLabel.Text = $"{summary} ✓ Eğitime hazır.";
+            datasetInfoLabel.ForeColor = Color.SeaGreen;
+        }
+    }
+
+    private void UpdateSampleButtons()
+    {
+        bool bursting = burstLabel is not null;
+        addSampleButton.Enabled = detector is not null && currentImage is not null && !bursting;
+        addFiveSamplesButton.Enabled = detector is not null && camera.State == CameraState.Running && !bursting;
+        deleteLabelButton.Enabled = labelsList.SelectedItems.Count > 0 && !bursting;
+        labelNameTextBox.ReadOnly = bursting;
+    }
+
+    private void OpenFolder(string folder)
+    {
+        try
+        {
+            Directory.CreateDirectory(folder);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            ShowWarning($"Klasör açılamadı:\n{folder}\n{ex.Message}");
         }
     }
 
@@ -399,6 +659,10 @@ public partial class MainForm : Form
         {
             operations.Add("Kameralar aranıyor");
         }
+        if (burstLabel is not null)
+        {
+            operations.Add($"Örnek toplanıyor ({burstAdded}/{BurstSampleCount})");
+        }
         if (operations.Count == 0 && currentImage is not null)
         {
             operations.Add(currentImageName is null ? "Son kamera karesi gösteriliyor" : "Resim gösteriliyor");
@@ -426,6 +690,11 @@ public partial class MainForm : Form
         MessageBox.Show(this, message, caption, MessageBoxButtons.OK, icon);
     }
 
+    protected virtual bool Confirm(string message, string caption)
+    {
+        return MessageBox.Show(this, message, caption, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+    }
+
     /// <summary>Arka plan iş parçacığından arayüze iş gönderir; pencere kapanıyorsa göndermez ve false döner.</summary>
     private bool RunOnUi(Action action)
     {
@@ -447,6 +716,7 @@ public partial class MainForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        burstTimer.Dispose();
         camera.FrameReady -= OnCameraFrame;
         camera.Dispose();
         SetDisplayImage(null);
