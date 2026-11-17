@@ -15,6 +15,7 @@ public partial class MainForm : Form
 
     private readonly AppPaths paths;
     private readonly FaceDataset dataset;
+    private readonly FaceCaptureService captures;
     private readonly FaceDetector? detector;
     private readonly string? detectorError;
     private readonly FaceRecognizerService recognizer;
@@ -46,6 +47,7 @@ public partial class MainForm : Form
         this.paths = paths;
         this.camera = camera;
         dataset = new FaceDataset(paths.DatasetDirectory);
+        captures = new FaceCaptureService(paths.CapturesDirectory);
         BuildLayout();
         versionLabel.Text = $"OpenCV {openCvVersion}";
 
@@ -94,10 +96,8 @@ public partial class MainForm : Form
         recognitionCheckBox.CheckedChanged += (_, _) => OnRecognitionToggled();
         thresholdTrackBar.ValueChanged += (_, _) => OnThresholdChanged();
 
-        foreach (Control control in new Control[] { saveFacesButton, openCapturesButton })
-        {
-            control.Enabled = false;
-        }
+        saveFacesButton.Click += (_, _) => SaveFaces();
+        openCapturesButton.Click += (_, _) => OpenFolder(captures.DirectoryPath);
 
         UpdateThresholdLabel();
         UpdateCameraState(CameraState.Stopped);
@@ -764,6 +764,29 @@ public partial class MainForm : Form
         }
     }
 
+    /// <summary>Ekranda görünen karedeki yüzleri, gösterilen etiketlerle birlikte kayıt klasörüne yazar.</summary>
+    private void SaveFaces()
+    {
+        if (currentImage is null || currentFaces.Count == 0)
+        {
+            ShowWarning("Kaydedilecek yüz yok. Önce yüz içeren bir resim açın veya kamerayı başlatın.");
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<string> files = captures.SaveFaces(currentImage, currentFaces, DateTime.Now);
+            string first = files.Count > 0 ? Path.GetFileName(files[0]) : "-";
+            statusLabel.Text = files.Count == 1
+                ? $"1 yüz kayıt klasörüne kaydedildi: {first}"
+                : $"{files.Count} yüz kayıt klasörüne kaydedildi (ilki: {first}).";
+        }
+        catch (FaceAppException ex)
+        {
+            ShowWarning(ex.Message);
+        }
+    }
+
     // ---------------- Algılama ve sonuçlar ----------------
 
     /// <summary>Hem arayüz hem kamera iş parçacığından çağrılır.</summary>
@@ -786,6 +809,7 @@ public partial class MainForm : Form
         faceCountLabel.Text = detector is null ? "Algılanan yüz: - (algılama devre dışı)"
             : currentImage is null ? "Algılanan yüz: -"
             : $"Algılanan yüz: {faces.Count}";
+        saveFacesButton.Enabled = currentImage is not null && faces.Count > 0;
 
         var rows = faces.Select((face, i) => face.Recognition is { } r
             ? new[] { (i + 1).ToString(), r.DisplayLabel, r.Distance.ToString("F1"), $"%{r.Confidence:0}" }

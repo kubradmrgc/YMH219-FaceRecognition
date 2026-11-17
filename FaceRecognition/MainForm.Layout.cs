@@ -161,8 +161,8 @@ public partial class MainForm
 
     private GroupBox BuildSourceGroup()
     {
-        var table = CreateTable(2);
-        var cameraLabel = new Label { Text = "Kamera:", AutoSize = true, Margin = new Padding(3, 10, 3, 3) };
+        var table = CreateTable("sourceTable", 2);
+        var cameraLabel = new Label { Name = "cameraTitleLabel", Text = "Kamera:", AutoSize = true, Margin = new Padding(3, 10, 3, 3) };
         table.Controls.Add(cameraLabel, 0, 0);
         table.SetColumnSpan(cameraLabel, 2);
         table.Controls.Add(cameraCombo, 0, 1);
@@ -184,7 +184,7 @@ public partial class MainForm
         resultsList.Columns.Add("Mesafe", 75, HorizontalAlignment.Right);
         resultsList.Columns.Add("Güven", 75, HorizontalAlignment.Right);
 
-        var table = CreateTable(2);
+        var table = CreateTable("resultsTable", 2);
         table.Dock = DockStyle.Fill;
         table.AutoSize = false;
         AddFullRow(table, faceCountLabel);
@@ -205,16 +205,16 @@ public partial class MainForm
         labelsList.Columns.Add("Etiket", 230);
         labelsList.Columns.Add("Örnek sayısı", 110, HorizontalAlignment.Right);
 
-        var table = CreateTable(2);
+        var table = CreateTable("trainingTable", 2);
         table.Dock = DockStyle.Fill;
         table.AutoSize = false;
-        AddFullRow(table, new Label { Text = "Etiket adı (kişi adı):", AutoSize = true, Margin = new Padding(3, 6, 3, 3) });
+        AddFullRow(table, new Label { Name = "labelNameTitleLabel", Text = "Etiket adı (kişi adı):", AutoSize = true, Margin = new Padding(3, 6, 3, 3) });
         AddFullRow(table, labelNameTextBox);
         int addRow = table.RowCount++;
         table.Controls.Add(addSampleButton, 0, addRow);
         table.Controls.Add(addFiveSamplesButton, 1, addRow);
         AddFullRow(table, sampleHintLabel);
-        AddFullRow(table, new Label { Text = "Etiketler:", AutoSize = true, Font = BoldFont, Margin = new Padding(3, 8, 3, 3) });
+        AddFullRow(table, new Label { Name = "labelsTitleLabel", Text = "Etiketler:", AutoSize = true, Font = BoldFont, Margin = new Padding(3, 8, 3, 3) });
         int listRow = AddFullRow(table, labelsList);
         int manageRow = table.RowCount++;
         table.Controls.Add(deleteLabelButton, 0, manageRow);
@@ -227,9 +227,9 @@ public partial class MainForm
         trainingTab.Controls.Add(table);
     }
 
-    private static TableLayoutPanel CreateTable(int columns)
+    private static TableLayoutPanel CreateTable(string name, int columns)
     {
-        var table = new TableLayoutPanel { ColumnCount = columns, Dock = DockStyle.Top, AutoSize = true };
+        var table = new TableLayoutPanel { Name = name, ColumnCount = columns, Dock = DockStyle.Top, AutoSize = true };
         for (int i = 0; i < columns; i++)
         {
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / columns));

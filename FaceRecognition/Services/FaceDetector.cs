@@ -23,7 +23,7 @@ public sealed class FaceDetector : IDisposable
         if (!File.Exists(cascadePath))
         {
             throw new FaceAppException(
-                $"Yüz algılama modeli bulunamadı:\n{cascadePath}\n\n" +
+                $"Yüz algılama modeli bulunamadı.\n{cascadePath}\n\n" +
                 $"'{CascadeFileName}' dosyası Assets klasöründe olmalı. Projeyi yeniden derleyin veya dosyayı geri yükleyin.");
         }
 
@@ -34,7 +34,7 @@ public sealed class FaceDetector : IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw new FaceAppException($"Yüz algılama modeli okunamadı:\n{cascadePath}\n{ex.Message}", ex);
+            throw new FaceAppException($"Yüz algılama modeli okunamadı.\n{cascadePath}\n{ex.Message}", ex);
         }
 
         // Dosya yolu yerine içerik verilir; OpenCV'nin dosya açma fonksiyonları Unicode yollarda başarısız olabiliyor.
@@ -55,7 +55,7 @@ public sealed class FaceDetector : IDisposable
         {
             classifier.Dispose();
             throw new FaceAppException(
-                $"Yüz algılama modeli bozuk veya geçersiz:\n{cascadePath}\n\n" +
+                $"Yüz algılama modeli bozuk veya geçersiz.\n{cascadePath}\n\n" +
                 $"OpenCV'nin özgün '{CascadeFileName}' dosyasını Assets klasörüne geri koyun.");
         }
     }

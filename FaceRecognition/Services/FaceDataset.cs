@@ -93,7 +93,7 @@ public sealed class FaceDataset
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw new FaceAppException($"Veri seti klasörü okunamadı:\n{DirectoryPath}\n{ex.Message}", ex);
+            throw new FaceAppException($"Veri seti klasörü okunamadı.\n{DirectoryPath}\n{ex.Message}", ex);
         }
     }
 

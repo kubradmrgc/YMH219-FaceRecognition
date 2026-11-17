@@ -56,7 +56,7 @@ public static class ImageFileService
             var info = new FileInfo(path);
             if (!info.Exists)
             {
-                throw new FaceAppException($"Resim dosyası bulunamadı:\n{path}");
+                throw new FaceAppException($"Resim dosyası bulunamadı.\n{path}");
             }
             if (info.Length > MaxFileBytes)
             {
@@ -112,7 +112,7 @@ public static class ImageFileService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw new FaceAppException($"Resim kaydedilemedi:\n{path}\n{ex.Message}", ex);
+            throw new FaceAppException($"Resim kaydedilemedi.\n{path}\n{ex.Message}", ex);
         }
     }
 }
